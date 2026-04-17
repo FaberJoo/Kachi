@@ -9,13 +9,12 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        NavigationSplitView {
+            SidebarView()
+        } detail: {
+            // TODO: 에디터 영역 (MVP)
+            Color.clear
         }
-        .padding()
     }
 }
 
