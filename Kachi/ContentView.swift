@@ -14,6 +14,7 @@ private let hoverZoneWidth: CGFloat = 24
 struct ContentView: View {
 
     @State private var appState = AppState()
+    @State private var toolbarDelegate = MainToolbarDelegate()
     @Environment(\.colorScheme) private var systemColorScheme
 
     /// Resolves the active theme: respects AppState override, falls back to system.
@@ -44,32 +45,40 @@ struct ContentView: View {
         }
         .frame(minWidth: 700, minHeight: 500)
         .preferredColorScheme(appState.colorScheme)
-        .toolbar {
-            // Sidebar toggle button — placed to the right of the traffic lights
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        appState.sidebarPinned.toggle()
-                        // Reset hover state when switching back to pinned mode
-                        if appState.sidebarPinned {
-                            appState.sidebarHovered = false
-                        }
-                    }
-                } label: {
-                    Image(systemName: "sidebar.left")
-                        .foregroundStyle(
-                            appState.sidebarPinned
-                                ? currentTheme.accentPrimary
-                                : currentTheme.textSecondary
-                        )
-                }
-                .help(appState.sidebarPinned ? "Switch to auto-hide" : "Pin sidebar")
-            }
-        }
-        .toolbarBackground(.bar, for: .windowToolbar)
-        .toolbarBackground(.visible, for: .windowToolbar)
+        // Install the AppKit toolbar via a zero-size background view.
+        // SwiftUI's ToolbarItem forces a capsule/glass background on macOS 14+
+        // which cannot be removed; bypassing it with NSToolbar + NSToolbarItem.isBordered = false
+        // is the only reliable fix.
+        .background(WindowToolbarSetup(delegate: toolbarDelegate))
         .environment(appState)
         .environment(\.theme, currentTheme)
+        .onAppear { configureToolbar() }
+        .onChange(of: appState.sidebarPinned) { refreshToolbarButton() }
+    }
+
+    // MARK: - Toolbar setup
+
+    private func configureToolbar() {
+        toolbarDelegate.onToggleSidebar = {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                appState.sidebarPinned.toggle()
+                if appState.sidebarPinned {
+                    appState.sidebarHovered = false
+                }
+            }
+        }
+        refreshToolbarButton()
+    }
+
+    private func refreshToolbarButton() {
+        let tintColor = appState.sidebarPinned
+            ? NSColor(currentTheme.accentPrimary)
+            : NSColor(currentTheme.textSecondary)
+        toolbarDelegate.update(
+            isPinned: appState.sidebarPinned,
+            tintColor: tintColor,
+            hoverColor: NSColor(currentTheme.surfaceHover)
+        )
     }
 
     // MARK: - Auto-hide overlay
