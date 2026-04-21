@@ -1,79 +1,42 @@
 import SwiftUI
 
-/// Color tokens ported from the HTML prototype.
-/// Returns the appropriate value based on AppState.colorScheme.
-struct AppTheme {
-    let colorScheme: ColorScheme
+enum AppTheme {
 
-    // MARK: - Background
+    static let light = SemanticColor(
+        backgroundPrimary:   PaletteColor.Gray.c00,
+        backgroundSecondary: PaletteColor.Gray.c05,
+        textPrimary:         PaletteColor.Gray.c95,
+        textSecondary:       PaletteColor.Gray.c60,
+        textTertiary:        PaletteColor.Gray.c40,
+        borderSubtle:        PaletteColor.Gray.c10,
+        borderStrong:        PaletteColor.Gray.c20,
+        accentPrimary:       PaletteColor.Blue.c50,
+        accentHover:         PaletteColor.Blue.c60,
+        accentPressed:       PaletteColor.Blue.c70,
+        statusDanger:        PaletteColor.Red.c50,
+        statusSuccess:       PaletteColor.Green.c50,
+        statusWarning:       PaletteColor.Orange.c50,
+        surfaceHover:        PaletteColor.Gray.c10,
+        surfaceActive:       PaletteColor.Gray.c20,
+        shadow:              PaletteColor.Gray.c90.opacity(0.2)
+    )
 
-    var bg: Color {
-        colorScheme == .dark ? Color(hex: "#1a1b1e") : Color(hex: "#ffffff")
-    }
-    var sidebarBg: Color {
-        colorScheme == .dark ? Color(hex: "#16171a") : Color(hex: "#f7f8fa")
-    }
-    var headerBg: Color { sidebarBg }
-
-    // MARK: - Text
-
-    var textPrimary: Color {
-        colorScheme == .dark ? Color(hex: "#e8e9ec") : Color(hex: "#1a1b1e")
-    }
-    var textSecondary: Color {
-        colorScheme == .dark ? Color(hex: "#8b8d97") : Color(hex: "#6b6f7a")
-    }
-    var textMuted: Color {
-        colorScheme == .dark ? Color(hex: "#5a5c66") : Color(hex: "#a0a4b0")
-    }
-
-    // MARK: - Border
-
-    var border: Color {
-        colorScheme == .dark ? Color(hex: "#333439") : Color(hex: "#d8dae0")
-    }
-    var borderLight: Color {
-        colorScheme == .dark ? Color(hex: "#2a2b2f") : Color(hex: "#e8eaef")
-    }
-
-    // MARK: - Accent
-
-    var accent: Color {
-        colorScheme == .dark ? Color(hex: "#4C9EEB") : Color(hex: "#2b7de9")
-    }
-
-    // MARK: - Sidebar item states
-
-    var sidebarItemHover: Color {
-        colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.04)
-    }
-    var sidebarItemActive: Color {
-        colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.07)
-    }
-
-    // MARK: - Shadow (used by auto-hide overlay)
-
-    var shadow: Color {
-        colorScheme == .dark ? Color.black.opacity(0.5) : Color.black.opacity(0.15)
-    }
-}
-
-// MARK: - Color hex initializer
-
-extension Color {
-    init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let r, g, b: Double
-        switch hex.count {
-        case 6:
-            r = Double((int >> 16) & 0xFF) / 255
-            g = Double((int >> 8)  & 0xFF) / 255
-            b = Double(int         & 0xFF) / 255
-        default:
-            r = 1; g = 1; b = 1
-        }
-        self.init(red: r, green: g, blue: b)
-    }
+    static let dark = SemanticColor(
+        backgroundPrimary:   PaletteColor.Gray.c95,
+        backgroundSecondary: PaletteColor.Gray.c90,
+        textPrimary:         PaletteColor.Gray.c05,
+        textSecondary:       PaletteColor.Gray.c30,
+        textTertiary:        PaletteColor.Gray.c50,
+        borderSubtle:        PaletteColor.Gray.c80,
+        borderStrong:        PaletteColor.Gray.c70,
+        accentPrimary:       PaletteColor.Blue.c40,
+        accentHover:         PaletteColor.Blue.c50,
+        accentPressed:       PaletteColor.Blue.c60,
+        statusDanger:        PaletteColor.Red.c40,
+        statusSuccess:       PaletteColor.Green.c40,
+        statusWarning:       PaletteColor.Orange.c40,
+        surfaceHover:        PaletteColor.Gray.c80,
+        surfaceActive:       PaletteColor.Gray.c80,
+        shadow:              PaletteColor.Gray.c100.opacity(0.4)
+    )
 }
