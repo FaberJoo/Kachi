@@ -14,8 +14,13 @@ private let hoverZoneWidth: CGFloat = 24
 struct ContentView: View {
 
     @State private var appState = AppState()
+    @Environment(\.colorScheme) private var systemColorScheme
 
-    private var theme: AppTheme { AppTheme(colorScheme: appState.colorScheme) }
+    /// Resolves the active theme: respects AppState override, falls back to system.
+    private var currentTheme: SemanticColor {
+        let scheme = appState.colorScheme ?? systemColorScheme
+        return scheme == .dark ? AppTheme.dark : AppTheme.light
+    }
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -23,12 +28,12 @@ struct ContentView: View {
             HStack(spacing: 0) {
                 // Sidebar is part of the layout only in pinned mode
                 if appState.sidebarPinned {
-                    SidebarView(appState: appState, theme: theme)
+                    SidebarView(appState: appState)
                         .frame(width: sidebarWidth)
                 }
 
                 // Editor area (to be implemented)
-                Color(theme.bg)
+                currentTheme.backgroundPrimary
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
@@ -38,7 +43,6 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 700, minHeight: 500)
-        .background(theme.bg)
         .preferredColorScheme(appState.colorScheme)
         .toolbar {
             // Sidebar toggle button — placed to the right of the traffic lights
@@ -53,12 +57,19 @@ struct ContentView: View {
                     }
                 } label: {
                     Image(systemName: "sidebar.left")
-                        .foregroundStyle(appState.sidebarPinned ? theme.accent : theme.textSecondary)
+                        .foregroundStyle(
+                            appState.sidebarPinned
+                                ? currentTheme.accentPrimary
+                                : currentTheme.textSecondary
+                        )
                 }
                 .help(appState.sidebarPinned ? "Switch to auto-hide" : "Pin sidebar")
             }
         }
+        .toolbarBackground(.bar, for: .windowToolbar)
+        .toolbarBackground(.visible, for: .windowToolbar)
         .environment(appState)
+        .environment(\.theme, currentTheme)
     }
 
     // MARK: - Auto-hide overlay
@@ -90,10 +101,10 @@ struct ContentView: View {
 
             // Sidebar: handles its own close via onHover when open
             if appState.sidebarHovered {
-                SidebarView(appState: appState, theme: theme)
+                SidebarView(appState: appState)
                     .frame(width: sidebarWidth)
                     .frame(maxHeight: .infinity)
-                    .shadow(color: theme.shadow, radius: 16, x: 4)
+                    .shadow(color: currentTheme.shadow, radius: 16, x: 4)
                     .onHover { hovering in
                         if !hovering {
                             withAnimation(.easeInOut(duration: 0.2)) {

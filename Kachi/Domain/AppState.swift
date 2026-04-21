@@ -17,7 +17,8 @@ final class AppState {
         sidebarPinned || sidebarHovered
     }
 
-    // MARK: - Theme
+    // MARK: - Appearance
 
-    var colorScheme: ColorScheme = .dark
+    /// nil follows the system setting; set explicitly to force dark or light
+    var colorScheme: ColorScheme? = nil
 }

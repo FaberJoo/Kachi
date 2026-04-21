@@ -3,18 +3,18 @@ import SwiftUI
 struct SidebarView: View {
 
     var appState: AppState
-    var theme: AppTheme
+    @Environment(\.theme) private var theme
 
     var body: some View {
         VStack(spacing: 0) {
             topToolbar
-            Divider().background(theme.border)
+            Divider()
             fileTree
             Spacer(minLength: 0)
-            Divider().background(theme.border)
+            Divider()
             bottomToolbar
         }
-        .background(theme.sidebarBg)
+        .background(theme.backgroundSecondary)
         .frame(maxHeight: .infinity)
     }
 
@@ -22,11 +22,11 @@ struct SidebarView: View {
 
     private var topToolbar: some View {
         HStack(spacing: 2) {
-            SidebarToolButton(icon: "magnifyingglass", help: "Search", theme: theme)
-            SidebarToolButton(icon: "folder.badge.plus", help: "New Folder", theme: theme)
-            SidebarToolButton(icon: "doc.badge.plus", help: "New Document", theme: theme)
+            SidebarToolButton(icon: "magnifyingglass", help: "Search")
+            SidebarToolButton(icon: "folder.badge.plus", help: "New Folder")
+            SidebarToolButton(icon: "doc.badge.plus", help: "New Document")
             Spacer()
-            SidebarToolButton(icon: "line.3.horizontal.decrease", help: "Sort", theme: theme)
+            SidebarToolButton(icon: "line.3.horizontal.decrease", help: "Sort")
         }
         .padding(.horizontal, 8)
         .frame(height: 36)
@@ -41,10 +41,10 @@ struct SidebarView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
+                        .foregroundStyle(theme.textTertiary)
                     Text("MyVault")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(theme.textMuted)
+                        .foregroundStyle(theme.textTertiary)
                         .textCase(.uppercase)
                         .kerning(0.5)
                     Spacer()
@@ -54,7 +54,7 @@ struct SidebarView: View {
 
                 // Placeholder items
                 ForEach(["Project Notes", "Ideas", "Journal", "References"], id: \.self) { name in
-                    SidebarFileRow(name: name, theme: theme)
+                    SidebarFileRow(name: name)
                 }
             }
             .padding(.vertical, 4)
@@ -65,15 +65,15 @@ struct SidebarView: View {
 
     private var bottomToolbar: some View {
         HStack(spacing: 2) {
-            SidebarToolButton(icon: "magnifyingglass", help: "Search", theme: theme)
+            SidebarToolButton(icon: "magnifyingglass", help: "Search")
             Spacer()
             Text("MyVault")
                 .font(.system(size: 11))
                 .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
             Spacer()
-            SidebarToolButton(icon: "questionmark.circle", help: "Help", theme: theme)
-            SidebarToolButton(icon: "gearshape", help: "Settings", theme: theme)
+            SidebarToolButton(icon: "questionmark.circle", help: "Help")
+            SidebarToolButton(icon: "gearshape", help: "Settings")
         }
         .padding(.horizontal, 8)
         .frame(height: 34)
@@ -85,7 +85,7 @@ struct SidebarView: View {
 private struct SidebarToolButton: View {
     let icon: String
     let help: String
-    let theme: AppTheme
+    @Environment(\.theme) private var theme
     @State private var isHovered = false
 
     var body: some View {
@@ -96,7 +96,7 @@ private struct SidebarToolButton: View {
                 .font(.system(size: 13))
                 .foregroundStyle(isHovered ? theme.textPrimary : theme.textSecondary)
                 .frame(width: 28, height: 28)
-                .background(isHovered ? theme.sidebarItemHover : Color.clear)
+                .background(isHovered ? theme.surfaceHover : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: 5))
         }
         .buttonStyle(.plain)
@@ -107,14 +107,14 @@ private struct SidebarToolButton: View {
 
 private struct SidebarFileRow: View {
     let name: String
-    let theme: AppTheme
+    @Environment(\.theme) private var theme
     @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "doc.text")
                 .font(.system(size: 12))
-                .foregroundStyle(theme.textMuted)
+                .foregroundStyle(theme.textTertiary)
             Text(name)
                 .font(.system(size: 13))
                 .foregroundStyle(theme.textPrimary)
@@ -123,7 +123,7 @@ private struct SidebarFileRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 5)
-        .background(isHovered ? theme.sidebarItemHover : Color.clear)
+        .background(isHovered ? theme.surfaceHover : Color.clear)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
     }
@@ -131,6 +131,7 @@ private struct SidebarFileRow: View {
 
 #Preview {
     let state = AppState()
-    SidebarView(appState: state, theme: AppTheme(colorScheme: .dark))
+    SidebarView(appState: state)
         .frame(width: 240, height: 600)
+        .environment(\.theme, AppTheme.dark)
 }
