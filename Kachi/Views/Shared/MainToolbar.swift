@@ -47,6 +47,7 @@ private final class HoverButton: NSButton {
 /// Manages the app's main NSToolbar entirely in AppKit so we can set
 /// NSToolbarItem.isBordered = false — the only way to suppress the
 /// automatic capsule/glass background macOS 14 applies to all toolbar items.
+@MainActor
 final class MainToolbarDelegate: NSObject, NSToolbarDelegate {
 
     var onToggleSidebar: () -> Void = {}
