@@ -13,6 +13,7 @@ final class VaultManager {
     var selectedNode: FileNode?
 
     private let store = VaultStore()
+    private var watcher: FileSystemWatcher?
 
     init() {
         let (saved, defaultID) = store.load()
@@ -57,6 +58,7 @@ final class VaultManager {
     /// Switches the active vault without changing the default.
     func setActive(vault: Vault) {
         activeVault = vault
+        watcher = nil
         Task { await self.loadTree(for: vault) }
     }
 
@@ -116,6 +118,22 @@ final class VaultManager {
         rootNodes = Self.loadChildren(of: url)
         url.stopAccessingSecurityScopedResource()
         isLoading = false
+        startWatching(url: url)
+    }
+
+    private func refreshTree() {
+        guard let vault = activeVault else { return }
+        let url = resolveURL(vault: vault)
+        _ = url.startAccessingSecurityScopedResource()
+        let fresh = Self.loadChildren(of: url)
+        Self.mergeNodes(existing: &rootNodes, fresh: fresh)
+        url.stopAccessingSecurityScopedResource()
+    }
+
+    private func startWatching(url: URL) {
+        watcher = FileSystemWatcher(url: url) { [weak self] in
+            self?.refreshTree()
+        }
     }
 
     private func resolveURL(vault: Vault) -> URL {
@@ -126,6 +144,24 @@ final class VaultManager {
             relativeTo: nil,
             bookmarkDataIsStale: &isStale
         )) ?? URL(filePath: "/")
+    }
+
+    /// Updates `existing` in place to match `fresh`, preserving expanded state and
+    /// FileNode identity for nodes that still exist (so SwiftUI doesn't re-render them).
+    private static func mergeNodes(existing: inout [FileNode], fresh: [FileNode]) {
+        let existingByURL = Dictionary(uniqueKeysWithValues: existing.map { ($0.url, $0) })
+
+        existing = fresh.map { freshNode in
+            guard let old = existingByURL[freshNode.url] else { return freshNode }
+            // Node still exists — refresh its children if it was expanded
+            if old.isExpanded, old.children != nil {
+                let freshChildren = loadChildren(of: old.url)
+                var oldChildren = old.children ?? []
+                mergeNodes(existing: &oldChildren, fresh: freshChildren)
+                old.children = oldChildren
+            }
+            return old
+        }
     }
 
     private static func loadChildren(of url: URL) -> [FileNode] {

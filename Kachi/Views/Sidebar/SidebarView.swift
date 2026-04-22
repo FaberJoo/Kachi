@@ -77,13 +77,17 @@ struct SidebarView: View {
     private var vaultSwitcher: some View {
         Menu {
             ForEach(vaultManager.vaults.sorted { $0.name < $1.name }) { vault in
+                let isActive  = vault.id == vaultManager.activeVault?.id
+                let isDefault = vault.id == vaultManager.defaultVaultID
+                let title = isDefault ? "\(vault.name)  —  Default" : vault.name
                 Button {
                     vaultManager.setActive(vault: vault)
                 } label: {
-                    if vault.id == vaultManager.defaultVaultID {
-                        Label(vault.name, systemImage: "checkmark")
+                    // checkmark = currently active  |  "— Default" = opens on next launch
+                    if isActive {
+                        Label(title, systemImage: "checkmark")
                     } else {
-                        Text(vault.name)
+                        Text(title)
                     }
                 }
             }
