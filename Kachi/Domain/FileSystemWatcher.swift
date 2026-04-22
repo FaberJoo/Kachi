@@ -71,7 +71,7 @@ final class FileSystemWatcher {
 
 // MARK: - Helpers
 
-private final class CallbackBox {
+private final class CallbackBox: @unchecked Sendable {
     let fn: @MainActor () -> Void
     init(_ fn: @escaping @MainActor () -> Void) { self.fn = fn }
 }
