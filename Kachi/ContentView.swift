@@ -14,6 +14,7 @@ private let hoverZoneWidth: CGFloat = 24
 struct ContentView: View {
 
     @State private var appState = AppState()
+    @State private var vaultManager = VaultManager()
     @State private var toolbarDelegate = MainToolbarDelegate()
     @Environment(\.colorScheme) private var systemColorScheme
 
@@ -52,6 +53,7 @@ struct ContentView: View {
         .background(WindowToolbarSetup(delegate: toolbarDelegate))
         .environment(appState)
         .environment(\.theme, currentTheme)
+        .environment(\.vaultManager, vaultManager)
         .onAppear { configureToolbar() }
         .onChange(of: appState.sidebarPinned) { refreshToolbarButton() }
     }

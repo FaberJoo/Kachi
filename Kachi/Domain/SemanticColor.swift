@@ -35,8 +35,9 @@ struct SemanticColor {
     let shadow: Color
 }
 
-// MARK: - Environment key
+// MARK: - Environment keys
 
 extension EnvironmentValues {
     @Entry var theme: SemanticColor = AppTheme.dark
+    @Entry var vaultManager: VaultManager = VaultManager()
 }
