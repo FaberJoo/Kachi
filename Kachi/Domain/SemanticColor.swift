@@ -38,7 +38,7 @@ struct SemanticColor {
 // MARK: - Environment keys
 
 private struct VaultManagerKey: EnvironmentKey {
-    @MainActor static let defaultValue = VaultManager()
+    nonisolated(unsafe) static let defaultValue = VaultManager()
 }
 
 extension EnvironmentValues {
