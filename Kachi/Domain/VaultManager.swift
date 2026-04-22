@@ -12,6 +12,7 @@ final class VaultManager {
     private(set) var rootNodes: [FileNode] = []
     private(set) var isLoading: Bool = false
     var selectedNode: FileNode?
+    private(set) var renamingNodeID: UUID?
 
     private let store = VaultStore()
     private var watcher: FileSystemWatcher?
@@ -91,6 +92,67 @@ final class VaultManager {
         persist()
     }
 
+    // MARK: - Create
+
+    func createFolder() {
+        guard let vault = activeVault else { return }
+        let vaultURL = resolveURL(vault: vault)
+        _ = vaultURL.startAccessingSecurityScopedResource()
+        defer { vaultURL.stopAccessingSecurityScopedResource() }
+
+        expandSelectedIfNeeded()
+
+        let parentURL = selectedParentURL(fallback: vaultURL)
+        let name = uniqueName("Untitled Folder", in: parentURL, ext: nil)
+        let newURL = parentURL.appendingPathComponent(name)
+        try? FileManager.default.createDirectory(at: newURL, withIntermediateDirectories: false)
+
+        refreshTreeScoped(vaultURL: vaultURL)
+        activateRename(url: newURL)
+    }
+
+    func createDocument() {
+        guard let vault = activeVault else { return }
+        let vaultURL = resolveURL(vault: vault)
+        _ = vaultURL.startAccessingSecurityScopedResource()
+        defer { vaultURL.stopAccessingSecurityScopedResource() }
+
+        expandSelectedIfNeeded()
+
+        let parentURL = selectedParentURL(fallback: vaultURL)
+        let name = uniqueName("Untitled", in: parentURL, ext: "md")
+        let newURL = parentURL.appendingPathComponent(name)
+        FileManager.default.createFile(atPath: newURL.path, contents: nil)
+
+        refreshTreeScoped(vaultURL: vaultURL)
+        activateRename(url: newURL)
+    }
+
+    func commitRename(node: FileNode, to newName: String) {
+        renamingNodeID = nil
+        let trimmed = newName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, trimmed != node.name else { return }
+
+        guard let vault = activeVault else { return }
+        let vaultURL = resolveURL(vault: vault)
+        _ = vaultURL.startAccessingSecurityScopedResource()
+        defer { vaultURL.stopAccessingSecurityScopedResource() }
+
+        let newURL = node.url.deletingLastPathComponent().appendingPathComponent(trimmed)
+        try? FileManager.default.moveItem(at: node.url, to: newURL)
+        refreshTreeScoped(vaultURL: vaultURL)
+        selectedNode = findNode(url: newURL, in: rootNodes)
+    }
+
+    func cancelRename() {
+        renamingNodeID = nil
+    }
+
+    func beginRenameSelected() {
+        guard let node = selectedNode, renamingNodeID == nil else { return }
+        renamingNodeID = node.id
+    }
+
     // MARK: - File tree
 
     func expand(node: FileNode) async {
@@ -126,9 +188,54 @@ final class VaultManager {
         guard let vault = activeVault else { return }
         let url = resolveURL(vault: vault)
         _ = url.startAccessingSecurityScopedResource()
-        let fresh = Self.loadChildren(of: url)
-        Self.mergeNodes(existing: &rootNodes, fresh: fresh)
+        refreshTreeScoped(vaultURL: url)
         url.stopAccessingSecurityScopedResource()
+    }
+
+    private func refreshTreeScoped(vaultURL: URL) {
+        let fresh = Self.loadChildren(of: vaultURL)
+        Self.mergeNodes(existing: &rootNodes, fresh: fresh)
+    }
+
+    private func expandSelectedIfNeeded() {
+        guard let sel = selectedNode, sel.isDirectory, !sel.isExpanded else { return }
+        sel.isExpanded = true
+        if sel.children == nil {
+            sel.children = Self.loadChildren(of: sel.url)
+        }
+    }
+
+    private func selectedParentURL(fallback: URL) -> URL {
+        guard let sel = selectedNode else { return fallback }
+        return sel.isDirectory ? sel.url : sel.url.deletingLastPathComponent()
+    }
+
+    private func uniqueName(_ base: String, in parent: URL, ext: String?) -> String {
+        func candidate(_ n: Int) -> String {
+            let stem = n == 0 ? base : "\(base) \(n)"
+            return ext.map { "\(stem).\($0)" } ?? stem
+        }
+        var i = 0
+        while FileManager.default.fileExists(atPath: parent.appendingPathComponent(candidate(i)).path) {
+            i += 1
+        }
+        return candidate(i)
+    }
+
+    private func activateRename(url: URL) {
+        guard let node = findNode(url: url, in: rootNodes) else { return }
+        selectedNode = node
+        renamingNodeID = node.id
+    }
+
+    private func findNode(url: URL, in nodes: [FileNode]) -> FileNode? {
+        for node in nodes {
+            if node.url == url { return node }
+            if let children = node.children, let found = findNode(url: url, in: children) {
+                return found
+            }
+        }
+        return nil
     }
 
     private func startWatching(url: URL) {

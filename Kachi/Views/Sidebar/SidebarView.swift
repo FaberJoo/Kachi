@@ -24,10 +24,12 @@ struct SidebarView: View {
     private var topToolbar: some View {
         HStack(spacing: 2) {
             SidebarToolButton(icon: "magnifyingglass", help: "Search")
-            SidebarToolButton(icon: "folder.badge.plus", help: "Open Vault") {
-                vaultManager.addVaultWithPicker()
+            SidebarToolButton(icon: "doc.badge.plus", help: "New Document") {
+                vaultManager.createDocument()
             }
-            SidebarToolButton(icon: "doc.badge.plus", help: "New Document")
+            SidebarToolButton(icon: "folder.badge.plus", help: "New Folder") {
+                vaultManager.createFolder()
+            }
             Spacer()
             SidebarToolButton(icon: "line.3.horizontal.decrease", help: "Sort")
         }
@@ -59,6 +61,9 @@ struct SidebarView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ReturnKeyMonitor {
+            vaultManager.beginRenameSelected()
+        })
     }
 
     // MARK: - Bottom toolbar
@@ -113,6 +118,43 @@ struct SidebarView: View {
 }
 
 // MARK: - Sub-components
+
+/// Listens for the Return key at the window level and fires `action` when no text field is active.
+private struct ReturnKeyMonitor: NSViewRepresentable {
+    let action: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = MonitorView()
+        view.action = action
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? MonitorView)?.action = action
+    }
+
+    private class MonitorView: NSView {
+        var action: (() -> Void)?
+        private var monitor: Any?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window != nil {
+                monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                    // keyCode 36 = Return; skip if a text field is first responder
+                    guard event.keyCode == 36,
+                          !(NSApp.keyWindow?.firstResponder is NSTextView) else {
+                        return event
+                    }
+                    self?.action?()
+                    return nil
+                }
+            } else {
+                if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
+            }
+        }
+    }
+}
 
 private struct SidebarToolButton: View {
     let icon: String
