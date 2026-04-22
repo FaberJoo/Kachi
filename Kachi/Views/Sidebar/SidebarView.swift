@@ -5,6 +5,7 @@ struct SidebarView: View {
     var appState: AppState
     @Environment(\.theme) private var theme
     @Environment(\.vaultManager) private var vaultManager
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,18 +80,46 @@ struct SidebarView: View {
 
     private var bottomToolbar: some View {
         HStack(spacing: 2) {
-            SidebarToolButton(icon: "magnifyingglass", help: "Search")
-            Spacer()
-            Text(vaultManager.activeVault?.name ?? "No Vault")
-                .font(.system(size: 11))
-                .foregroundStyle(theme.textSecondary)
-                .lineLimit(1)
+            vaultSwitcher
             Spacer()
             SidebarToolButton(icon: "questionmark.circle", help: "Help")
             SidebarToolButton(icon: "gearshape", help: "Settings")
         }
         .padding(.horizontal, 8)
         .frame(height: 34)
+    }
+
+    private var vaultSwitcher: some View {
+        Menu {
+            ForEach(vaultManager.vaults.sorted { $0.name < $1.name }) { vault in
+                Button {
+                    vaultManager.setActive(vault: vault)
+                } label: {
+                    if vault.id == vaultManager.defaultVaultID {
+                        Label(vault.name, systemImage: "checkmark")
+                    } else {
+                        Text(vault.name)
+                    }
+                }
+            }
+            if !vaultManager.vaults.isEmpty { Divider() }
+            Button("Manage Vaults…") {
+                openWindow(id: "vault-manager")
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(vaultManager.activeVault?.name ?? "No Vault")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(theme.textSecondary)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(theme.textTertiary)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 }
 

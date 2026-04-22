@@ -6,6 +6,7 @@ import Observation
 final class VaultManager {
     private(set) var vaults: [Vault] = []
     private(set) var activeVault: Vault?
+    private(set) var defaultVaultID: UUID?
     private(set) var rootNodes: [FileNode] = []
     private(set) var isLoading: Bool = false
 
@@ -14,6 +15,7 @@ final class VaultManager {
     init() {
         let (saved, defaultID) = store.load()
         vaults = saved
+        defaultVaultID = defaultID
         activeVault = saved.first { $0.id == defaultID } ?? saved.first
         if let vault = activeVault {
             Task { await self.loadTree(for: vault) }
@@ -22,7 +24,7 @@ final class VaultManager {
 
     // MARK: - Vault management
 
-    /// Opens NSOpenPanel and adds the selected folder as a new vault.
+    /// Opens NSOpenPanel, creates a security-scoped bookmark, and adds the vault.
     func addVaultWithPicker() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
@@ -39,7 +41,10 @@ final class VaultManager {
             )
             let vault = Vault(bookmarkData: bookmark, resolvedURL: url)
             vaults.append(vault)
-            if activeVault == nil { activeVault = vault }
+            if activeVault == nil {
+                activeVault = vault
+                defaultVaultID = vault.id
+            }
             persist()
             Task { await self.loadTree(for: vault) }
         } catch {
@@ -47,8 +52,30 @@ final class VaultManager {
         }
     }
 
+    /// Switches the active vault without changing the default.
+    func setActive(vault: Vault) {
+        activeVault = vault
+        Task { await self.loadTree(for: vault) }
+    }
+
+    /// Marks a vault as the default (opened on next launch).
+    func setAsDefault(vault: Vault) {
+        defaultVaultID = vault.id
+        persist()
+    }
+
+    func rename(vault: Vault, to newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty,
+              let index = vaults.firstIndex(where: { $0.id == vault.id }) else { return }
+        vaults[index].name = trimmed
+        if activeVault?.id == vault.id { activeVault = vaults[index] }
+        persist()
+    }
+
     func remove(vault: Vault) {
         vaults.removeAll { $0.id == vault.id }
+        if defaultVaultID == vault.id { defaultVaultID = vaults.first?.id }
         if activeVault?.id == vault.id {
             activeVault = vaults.first
             rootNodes = []
@@ -59,15 +86,8 @@ final class VaultManager {
         persist()
     }
 
-    func setDefault(vault: Vault) {
-        activeVault = vault
-        persist()
-        Task { await self.loadTree(for: vault) }
-    }
-
     // MARK: - File tree
 
-    /// Expands a directory node by loading its immediate children.
     func expand(node: FileNode) async {
         guard node.isDirectory, node.children == nil else {
             node.isExpanded = true
@@ -122,6 +142,6 @@ final class VaultManager {
     }
 
     private func persist() {
-        store.save(vaults: vaults, defaultVaultID: activeVault?.id)
+        store.save(vaults: vaults, defaultVaultID: defaultVaultID)
     }
 }
