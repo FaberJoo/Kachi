@@ -4,13 +4,13 @@ struct SidebarView: View {
 
     var appState: AppState
     @Environment(\.theme) private var theme
+    @Environment(\.vaultManager) private var vaultManager
 
     var body: some View {
         VStack(spacing: 0) {
             topToolbar
             Divider()
             fileTree
-            Spacer(minLength: 0)
             Divider()
             bottomToolbar
         }
@@ -23,7 +23,9 @@ struct SidebarView: View {
     private var topToolbar: some View {
         HStack(spacing: 2) {
             SidebarToolButton(icon: "magnifyingglass", help: "Search")
-            SidebarToolButton(icon: "folder.badge.plus", help: "New Folder")
+            SidebarToolButton(icon: "folder.badge.plus", help: "Open Vault") {
+                vaultManager.addVaultWithPicker()
+            }
             SidebarToolButton(icon: "doc.badge.plus", help: "New Document")
             Spacer()
             SidebarToolButton(icon: "line.3.horizontal.decrease", help: "Sort")
@@ -32,33 +34,45 @@ struct SidebarView: View {
         .frame(height: 36)
     }
 
-    // MARK: - File tree (placeholder)
+    // MARK: - File tree
 
     private var fileTree: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                // Vault section header
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(theme.textTertiary)
-                    Text("MyVault")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(theme.textTertiary)
-                        .textCase(.uppercase)
-                        .kerning(0.5)
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+        Group {
+            if vaultManager.activeVault == nil {
+                EmptyVaultView()
+            } else if vaultManager.isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if vaultManager.rootNodes.isEmpty {
+                Text("No files")
+                    .font(.system(size: 12))
+                    .foregroundStyle(theme.textTertiary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Vault header
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(theme.textTertiary)
+                            Text(vaultManager.activeVault?.name ?? "")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(theme.textTertiary)
+                                .textCase(.uppercase)
+                                .kerning(0.5)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
 
-                // Placeholder items
-                ForEach(["Project Notes", "Ideas", "Journal", "References"], id: \.self) { name in
-                    SidebarFileRow(name: name)
+                        FileTreeView(nodes: vaultManager.rootNodes)
+                    }
+                    .padding(.vertical, 4)
                 }
             }
-            .padding(.vertical, 4)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Bottom toolbar
@@ -67,7 +81,7 @@ struct SidebarView: View {
         HStack(spacing: 2) {
             SidebarToolButton(icon: "magnifyingglass", help: "Search")
             Spacer()
-            Text("MyVault")
+            Text(vaultManager.activeVault?.name ?? "No Vault")
                 .font(.system(size: 11))
                 .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
@@ -85,12 +99,13 @@ struct SidebarView: View {
 private struct SidebarToolButton: View {
     let icon: String
     let help: String
+    var action: (() -> Void)? = nil
     @Environment(\.theme) private var theme
     @State private var isHovered = false
 
     var body: some View {
         Button {
-            // TODO: implement individual actions
+            action?()
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 13))
@@ -105,33 +120,10 @@ private struct SidebarToolButton: View {
     }
 }
 
-private struct SidebarFileRow: View {
-    let name: String
-    @Environment(\.theme) private var theme
-    @State private var isHovered = false
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "doc.text")
-                .font(.system(size: 12))
-                .foregroundStyle(theme.textTertiary)
-            Text(name)
-                .font(.system(size: 13))
-                .foregroundStyle(theme.textPrimary)
-                .lineLimit(1)
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 5)
-        .background(isHovered ? theme.surfaceHover : Color.clear)
-        .contentShape(Rectangle())
-        .onHover { isHovered = $0 }
-    }
-}
-
 #Preview {
     let state = AppState()
     SidebarView(appState: state)
         .frame(width: 240, height: 600)
         .environment(\.theme, AppTheme.dark)
+        .environment(\.vaultManager, VaultManager())
 }
