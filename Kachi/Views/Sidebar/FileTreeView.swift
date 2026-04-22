@@ -23,7 +23,14 @@ private struct FileTreeRow: View {
     @Environment(\.vaultManager) private var vaultManager
     @State private var isHovered = false
 
+    private var isSelected: Bool { vaultManager.selectedNode?.id == node.id }
     private var indentWidth: CGFloat { CGFloat(depth) * 14 }
+
+    private var rowBackground: Color {
+        if isSelected { return theme.surfaceActive }
+        if isHovered { return theme.surfaceHover }
+        return .clear
+    }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -33,8 +40,9 @@ private struct FileTreeRow: View {
             if node.isDirectory {
                 Image(systemName: node.isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(theme.textTertiary)
+                    .foregroundStyle(isSelected ? theme.textPrimary : theme.textTertiary)
                     .frame(width: 12)
+                    .onTapGesture { toggleExpand() }
             } else {
                 Spacer().frame(width: 12)
             }
@@ -52,16 +60,22 @@ private struct FileTreeRow: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(isHovered ? theme.surfaceHover : Color.clear)
+        .background(rowBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .padding(.horizontal, 4)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .onTapGesture {
-            guard node.isDirectory else { return }
-            if node.isExpanded {
-                vaultManager.collapse(node: node)
-            } else {
-                Task { await vaultManager.expand(node: node) }
-            }
+            vaultManager.selectedNode = node
+            if node.isDirectory { toggleExpand() }
+        }
+    }
+
+    private func toggleExpand() {
+        if node.isExpanded {
+            vaultManager.collapse(node: node)
+        } else {
+            Task { await vaultManager.expand(node: node) }
         }
     }
 }

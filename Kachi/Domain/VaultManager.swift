@@ -10,6 +10,7 @@ final class VaultManager {
     private(set) var defaultVaultID: UUID?
     private(set) var rootNodes: [FileNode] = []
     private(set) var isLoading: Bool = false
+    var selectedNode: FileNode?
 
     private let store = VaultStore()
 

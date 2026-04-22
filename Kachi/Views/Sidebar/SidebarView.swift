@@ -52,21 +52,6 @@ struct SidebarView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        // Vault header
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(theme.textTertiary)
-                            Text(vaultManager.activeVault?.name ?? "")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(theme.textTertiary)
-                                .textCase(.uppercase)
-                                .kerning(0.5)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-
                         FileTreeView(nodes: vaultManager.rootNodes)
                     }
                     .padding(.vertical, 4)
