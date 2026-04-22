@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import Observation
+import SwiftUI
 
 @MainActor
 @Observable
@@ -181,5 +182,18 @@ final class VaultManager {
 
     private func persist() {
         store.save(vaults: vaults, defaultVaultID: defaultVaultID)
+    }
+}
+
+// MARK: - Environment key
+
+private struct VaultManagerKey: EnvironmentKey {
+    static let defaultValue: VaultManager = MainActor.assumeIsolated { VaultManager() }
+}
+
+extension EnvironmentValues {
+    var vaultManager: VaultManager {
+        get { self[VaultManagerKey.self] }
+        set { self[VaultManagerKey.self] = newValue }
     }
 }

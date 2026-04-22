@@ -37,14 +37,6 @@ struct SemanticColor {
 
 // MARK: - Environment keys
 
-private struct VaultManagerKey: EnvironmentKey {
-    nonisolated(unsafe) static let defaultValue = VaultManager()
-}
-
 extension EnvironmentValues {
     @Entry var theme: SemanticColor = AppTheme.dark
-    var vaultManager: VaultManager {
-        get { self[VaultManagerKey.self] }
-        set { self[VaultManagerKey.self] = newValue }
-    }
 }
