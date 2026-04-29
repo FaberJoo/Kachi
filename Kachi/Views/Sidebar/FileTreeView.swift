@@ -96,6 +96,22 @@ private struct FileTreeRow: View {
         .padding(.horizontal, 4)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
+        .contextMenu {
+            Button("New Folder") {
+                vaultManager.createFolder(relativeTo: node)
+            }
+            Button("New File") {
+                vaultManager.createDocument(relativeTo: node)
+            }
+            Divider()
+            Button("Rename") {
+                vaultManager.selectedNode = node
+                vaultManager.beginRenameSelected()
+            }
+            Button("Delete", role: .destructive) {
+                vaultManager.delete(node: node)
+            }
+        }
         .onTapGesture(count: 2) {
             NSApp.keyWindow?.makeFirstResponder(nil)
             vaultManager.selectedNode = node

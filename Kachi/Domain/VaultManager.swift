@@ -73,7 +73,7 @@ final class VaultManager {
     func rename(vault: Vault, to newName: String) {
         let trimmed = newName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty,
-              let index = vaults.firstIndex(where: { $0.id == vault.id }) else { return }
+            let index = vaults.firstIndex(where: { $0.id == vault.id }) else { return }
         vaults[index].name = trimmed
         if activeVault?.id == vault.id { activeVault = vaults[index] }
         persist()
@@ -94,38 +94,51 @@ final class VaultManager {
 
     // MARK: - Create
 
-    func createFolder() {
+    func createFolder(relativeTo contextNode: FileNode? = nil) {
         guard let vault = activeVault else { return }
         let vaultURL = resolveURL(vault: vault)
         _ = vaultURL.startAccessingSecurityScopedResource()
         defer { vaultURL.stopAccessingSecurityScopedResource() }
 
-        expandSelectedIfNeeded()
+        let target = contextNode ?? selectedNode
+        expandIfNeeded(node: target)
 
-        let parentURL = selectedParentURL(fallback: vaultURL)
-        let name = uniqueName("Untitled Folder", in: parentURL, ext: nil)
-        let newURL = parentURL.appendingPathComponent(name)
+        let parent = computeParentURL(for: target, fallback: vaultURL)
+        let name = uniqueName("Untitled Folder", in: parent, ext: nil)
+        let newURL = parent.appendingPathComponent(name)
         try? FileManager.default.createDirectory(at: newURL, withIntermediateDirectories: false)
 
         refreshTreeScoped(vaultURL: vaultURL)
         activateRename(url: newURL)
     }
 
-    func createDocument() {
+    func createDocument(relativeTo contextNode: FileNode? = nil) {
         guard let vault = activeVault else { return }
         let vaultURL = resolveURL(vault: vault)
         _ = vaultURL.startAccessingSecurityScopedResource()
         defer { vaultURL.stopAccessingSecurityScopedResource() }
 
-        expandSelectedIfNeeded()
+        let target = contextNode ?? selectedNode
+        expandIfNeeded(node: target)
 
-        let parentURL = selectedParentURL(fallback: vaultURL)
-        let name = uniqueName("Untitled", in: parentURL, ext: "md")
-        let newURL = parentURL.appendingPathComponent(name)
+        let parent = computeParentURL(for: target, fallback: vaultURL)
+        let name = uniqueName("Untitled", in: parent, ext: "md")
+        let newURL = parent.appendingPathComponent(name)
         FileManager.default.createFile(atPath: newURL.path, contents: nil)
 
         refreshTreeScoped(vaultURL: vaultURL)
         activateRename(url: newURL)
+    }
+
+    func delete(node: FileNode) {
+        guard let vault = activeVault else { return }
+        let vaultURL = resolveURL(vault: vault)
+        _ = vaultURL.startAccessingSecurityScopedResource()
+        defer { vaultURL.stopAccessingSecurityScopedResource() }
+
+        if selectedNode?.id == node.id { selectedNode = nil }
+        try? FileManager.default.trashItem(at: node.url, resultingItemURL: nil)
+        refreshTreeScoped(vaultURL: vaultURL)
     }
 
     func commitRename(node: FileNode, to newName: String) {
@@ -197,17 +210,17 @@ final class VaultManager {
         Self.mergeNodes(existing: &rootNodes, fresh: fresh)
     }
 
-    private func expandSelectedIfNeeded() {
-        guard let sel = selectedNode, sel.isDirectory, !sel.isExpanded else { return }
-        sel.isExpanded = true
-        if sel.children == nil {
-            sel.children = Self.loadChildren(of: sel.url)
+    private func expandIfNeeded(node: FileNode?) {
+        guard let node, node.isDirectory, !node.isExpanded else { return }
+        node.isExpanded = true
+        if node.children == nil {
+            node.children = Self.loadChildren(of: node.url)
         }
     }
 
-    private func selectedParentURL(fallback: URL) -> URL {
-        guard let sel = selectedNode else { return fallback }
-        return sel.isDirectory ? sel.url : sel.url.deletingLastPathComponent()
+    private func computeParentURL(for node: FileNode?, fallback: URL) -> URL {
+        guard let node else { return fallback }
+        return node.isDirectory ? node.url : node.url.deletingLastPathComponent()
     }
 
     private func uniqueName(_ base: String, in parent: URL, ext: String?) -> String {
