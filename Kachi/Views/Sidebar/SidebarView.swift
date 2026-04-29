@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct SidebarView: View {
 
@@ -165,6 +166,7 @@ private struct SidebarToolButton: View {
 
     var body: some View {
         Button {
+            NSApp.keyWindow?.makeFirstResponder(nil)
             action?()
         } label: {
             Image(systemName: icon)

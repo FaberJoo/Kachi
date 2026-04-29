@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct FileTreeView: View {
     let nodes: [FileNode]
@@ -96,9 +97,12 @@ private struct FileTreeRow: View {
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .onTapGesture(count: 2) {
+            NSApp.keyWindow?.makeFirstResponder(nil)
+            vaultManager.selectedNode = node
             vaultManager.beginRenameSelected()
         }
         .onTapGesture {
+            NSApp.keyWindow?.makeFirstResponder(nil)
             vaultManager.selectedNode = node
         }
         .onChange(of: vaultManager.renamingNodeID) { _, newID in
