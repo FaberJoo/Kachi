@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var editorTabs: [EditorDocumentTab] = []
     @State private var activeEditorTabID: UUID?
     @State private var titleFocusRequestID: Int = 0
+    @State private var recentDocumentURLs: [URL] = []
     @Environment(\.vaultManager) private var vaultManager
     @Environment(\.colorScheme) private var systemColorScheme
 
@@ -37,7 +38,15 @@ struct ContentView: View {
                         .frame(width: sidebarWidth)
                 }
 
-                if activeTabIndex != nil {
+                if editorTabs.isEmpty {
+                    emptyTabsView
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(currentTheme.backgroundPrimary)
+                } else if isActiveScratchTab {
+                    newTabLandingView
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(currentTheme.backgroundPrimary)
+                } else {
                     EditorWorkspaceView(
                         activeTitle: activeEditorTitle,
                         onCommitTitle: renameActiveDocumentTitle,
@@ -47,10 +56,6 @@ struct ContentView: View {
                         titleWarningMessage: validateActiveDocumentTitle
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    emptyTabsView
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(currentTheme.backgroundPrimary)
                 }
             }
 
@@ -81,6 +86,10 @@ struct ContentView: View {
             openSelectedMarkdownFileIfNeeded()
         }
         .onChange(of: editorTabs) { _, newTabs in
+            if !newTabs.isEmpty,
+               activeEditorTabID == nil || !newTabs.contains(where: { $0.id == activeEditorTabID }) {
+                activeEditorTabID = newTabs[0].id
+            }
             toolbarDelegate.updateTabs(
                 newTabs,
                 activeTabID: activeEditorTabID,
@@ -93,6 +102,9 @@ struct ContentView: View {
                 activeTabID: newActiveID,
                 editorBackgroundColor: NSColor(currentTheme.backgroundPrimary)
             )
+        }
+        .onChange(of: vaultManager.deleteEventID) { _, _ in
+            handleDeletedNodeEvent()
         }
     }
 
@@ -138,9 +150,13 @@ struct ContentView: View {
     // MARK: - Editor actions
 
     private func addScratchTab() {
-        // Use the same rule set as the sidebar "New Document" action:
-        // selected folder/file => create in that context, otherwise vault root.
-        vaultManager.createDocument()
+        let tab = EditorDocumentTab(
+            sourceURL: nil,
+            title: "New Tab",
+            content: ""
+        )
+        editorTabs.append(tab)
+        activeEditorTabID = tab.id
     }
 
     private func closeTab(_ tabID: UUID) {
@@ -162,9 +178,7 @@ struct ContentView: View {
         editorTabs[index].content = newValue
 
         guard let sourceURL = editorTabs[index].sourceURL else { return }
-        guard let node = findNode(url: sourceURL, in: vaultManager.rootNodes) else { return }
-
-        let didSave = vaultManager.writeMarkdown(node: node, content: newValue)
+        let didSave = vaultManager.writeMarkdown(at: sourceURL, content: newValue)
         if didSave {
             editorTabs[index].lastSavedContent = newValue
         }
@@ -187,26 +201,7 @@ struct ContentView: View {
 
     private func openSelectedMarkdownFileIfNeeded() {
         guard let node = vaultManager.selectedNode else { return }
-        guard !node.isDirectory else { return }
-        guard node.url.pathExtension.lowercased() == "md" else { return }
-
-        if let existing = editorTabs.firstIndex(where: { $0.sourceURL == node.url }) {
-            activeEditorTabID = editorTabs[existing].id
-            return
-        }
-
-        let content = vaultManager.readMarkdown(node: node) ?? ""
-        let tab = EditorDocumentTab(
-            sourceURL: node.url,
-            title: node.url.deletingPathExtension().lastPathComponent,
-            content: content
-        )
-        editorTabs.append(tab)
-        activeEditorTabID = tab.id
-
-        if vaultManager.consumeTitleFocusRequest(for: node.url) {
-            titleFocusRequestID += 1
-        }
+        openDocumentInActiveTab(documentURL: node.url)
     }
 
     private func renameActiveDocumentTitle(_ newTitle: String) {
@@ -321,6 +316,44 @@ struct ContentView: View {
         }
     }
 
+    private func handleDeletedNodeEvent() {
+        guard let deletedURL = vaultManager.deletedNodeURL else { return }
+        let wasDirectory = vaultManager.deletedNodeWasDirectory
+        let pathPrefix = deletedURL.path + "/"
+
+        if wasDirectory {
+            recentDocumentURLs.removeAll {
+                $0.path == deletedURL.path || $0.path.hasPrefix(pathPrefix)
+            }
+        } else {
+            recentDocumentURLs.removeAll { $0 == deletedURL }
+        }
+
+        let removedTabIDs: Set<UUID> = Set(
+            editorTabs.compactMap { tab -> UUID? in
+                guard let url = tab.sourceURL else { return nil }
+                if wasDirectory {
+                    let path = url.path
+                    return (path == deletedURL.path || path.hasPrefix(pathPrefix)) ? tab.id : nil
+                }
+                return url == deletedURL ? tab.id : nil
+            }
+        )
+
+        guard !removedTabIDs.isEmpty else { return }
+        let previousActiveTabID = activeEditorTabID
+        editorTabs.removeAll { removedTabIDs.contains($0.id) }
+
+        guard let previousActiveTabID, removedTabIDs.contains(previousActiveTabID) else {
+            if editorTabs.isEmpty {
+                activeEditorTabID = nil
+            }
+            return
+        }
+
+        activeEditorTabID = editorTabs.last?.id
+    }
+
     private var emptyTabsView: some View {
         VStack {
             Spacer()
@@ -329,6 +362,131 @@ struct ContentView: View {
                 .foregroundStyle(currentTheme.textSecondary)
             Spacer()
         }
+    }
+
+    private var newTabLandingView: some View {
+        VStack {
+            HStack {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Button("Create new document") {
+                            vaultManager.createDocument()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(currentTheme.textPrimary)
+
+                        Button("Go to file") {
+                            openDocumentFromPicker()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(currentTheme.textPrimary)
+
+                        Button("Close") {
+                            closeActiveTab()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(currentTheme.textPrimary)
+                    }
+
+                    Divider()
+                        .overlay(currentTheme.borderSubtle)
+
+                    Text("Recently Opend Document")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(currentTheme.textSecondary)
+
+                    if !recentOpenedDocumentURLs.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(recentOpenedDocumentURLs, id: \.self) { documentURL in
+                                Button(displayName(for: documentURL)) {
+                                    openDocumentInActiveTab(documentURL: documentURL)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(currentTheme.textSecondary)
+                    }
+                }
+                .frame(maxWidth: 520, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .padding(.horizontal, 42)
+        .padding(.top, 56)
+        .padding(.bottom, 24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var isActiveScratchTab: Bool {
+        guard let index = activeTabIndex else { return false }
+        return editorTabs[index].sourceURL == nil
+    }
+
+    private var recentOpenedDocumentURLs: [URL] {
+        recentDocumentURLs.filter { url in
+            url.pathExtension.lowercased() == "md" &&
+            FileManager.default.fileExists(atPath: url.path)
+        }
+    }
+
+    private func openDocumentFromPicker() {
+        if let selectedURL = vaultManager.pickMarkdownDocumentURLInActiveVault() {
+            openDocumentInActiveTab(documentURL: selectedURL)
+        }
+    }
+
+    private func closeActiveTab() {
+        guard let activeEditorTabID else { return }
+        closeTab(activeEditorTabID)
+    }
+
+    private func openDocumentInActiveTab(documentURL: URL) {
+        guard documentURL.pathExtension.lowercased() == "md" else { return }
+
+        if let existing = editorTabs.firstIndex(where: { $0.sourceURL == documentURL }) {
+            activeEditorTabID = editorTabs[existing].id
+            recordRecentDocument(url: documentURL)
+            return
+        }
+
+        let content = vaultManager.readMarkdown(at: documentURL) ?? ""
+        let opened = EditorDocumentTab(
+            sourceURL: documentURL,
+            title: documentURL.deletingPathExtension().lastPathComponent,
+            content: content
+        )
+
+        if let activeIndex = activeTabIndex {
+            editorTabs[activeIndex].sourceURL = opened.sourceURL
+            editorTabs[activeIndex].title = opened.title
+            editorTabs[activeIndex].content = opened.content
+            editorTabs[activeIndex].lastSavedContent = opened.lastSavedContent
+        } else {
+            editorTabs.append(opened)
+            activeEditorTabID = opened.id
+        }
+
+        recordRecentDocument(url: documentURL)
+
+        if vaultManager.consumeTitleFocusRequest(for: documentURL) {
+            titleFocusRequestID += 1
+        }
+    }
+
+    private func recordRecentDocument(url: URL) {
+        recentDocumentURLs.removeAll { $0 == url }
+        recentDocumentURLs.insert(url, at: 0)
+        if recentDocumentURLs.count > 5 {
+            recentDocumentURLs = Array(recentDocumentURLs.prefix(5))
+        }
+    }
+
+    private func displayName(for url: URL) -> String {
+        url.deletingPathExtension().lastPathComponent
     }
 }
 

@@ -14,6 +14,9 @@ final class VaultManager {
     var selectedNode: FileNode?
     private(set) var renamingNodeID: UUID?
     private(set) var pendingTitleFocusDocumentURL: URL?
+    private(set) var deletedNodeURL: URL?
+    private(set) var deletedNodeWasDirectory: Bool = false
+    private(set) var deleteEventID: Int = 0
 
     private let store = VaultStore()
     private var watcher: FileSystemWatcher?
@@ -129,7 +132,7 @@ final class VaultManager {
         pendingTitleFocusDocumentURL = newURL
 
         refreshTreeScoped(vaultURL: vaultURL)
-        activateRename(url: newURL)
+        activateSelection(url: newURL)
     }
 
     func delete(node: FileNode) {
@@ -139,7 +142,14 @@ final class VaultManager {
         defer { vaultURL.stopAccessingSecurityScopedResource() }
 
         if selectedNode?.id == node.id { selectedNode = nil }
-        try? FileManager.default.trashItem(at: node.url, resultingItemURL: nil)
+        do {
+            try FileManager.default.trashItem(at: node.url, resultingItemURL: nil)
+            deletedNodeURL = node.url
+            deletedNodeWasDirectory = node.isDirectory
+            deleteEventID += 1
+        } catch {
+            print("VaultManager: delete failed at \(node.url.path): \(error)")
+        }
         refreshTreeScoped(vaultURL: vaultURL)
     }
 
@@ -201,6 +211,17 @@ final class VaultManager {
         return try? String(contentsOf: node.url, encoding: .utf8)
     }
 
+    func readMarkdown(at documentURL: URL) -> String? {
+        guard documentURL.pathExtension.lowercased() == "md" else { return nil }
+        guard let vault = activeVault else { return nil }
+
+        let vaultURL = resolveURL(vault: vault)
+        _ = vaultURL.startAccessingSecurityScopedResource()
+        defer { vaultURL.stopAccessingSecurityScopedResource() }
+
+        return try? String(contentsOf: documentURL, encoding: .utf8)
+    }
+
     @discardableResult
     func writeMarkdown(node: FileNode, content: String) -> Bool {
         guard !node.isDirectory else { return false }
@@ -216,6 +237,24 @@ final class VaultManager {
             return true
         } catch {
             print("VaultManager: write failed for \(node.url.path): \(error)")
+            return false
+        }
+    }
+
+    @discardableResult
+    func writeMarkdown(at documentURL: URL, content: String) -> Bool {
+        guard documentURL.pathExtension.lowercased() == "md" else { return false }
+        guard let vault = activeVault else { return false }
+
+        let vaultURL = resolveURL(vault: vault)
+        _ = vaultURL.startAccessingSecurityScopedResource()
+        defer { vaultURL.stopAccessingSecurityScopedResource() }
+
+        do {
+            try content.write(to: documentURL, atomically: true, encoding: .utf8)
+            return true
+        } catch {
+            print("VaultManager: write failed for \(documentURL.path): \(error)")
             return false
         }
     }
@@ -263,6 +302,31 @@ final class VaultManager {
         let candidateURL = sourceURL.deletingLastPathComponent().appendingPathComponent(trimmed)
         guard candidateURL != sourceURL else { return false }
         return FileManager.default.fileExists(atPath: candidateURL.path)
+    }
+
+    func pickMarkdownDocumentURLInActiveVault() -> URL? {
+        guard let vault = activeVault else { return nil }
+        let vaultURL = resolveURL(vault: vault)
+
+        _ = vaultURL.startAccessingSecurityScopedResource()
+        defer { vaultURL.stopAccessingSecurityScopedResource() }
+
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedFileTypes = ["md"]
+        panel.directoryURL = vaultURL
+        panel.prompt = "Open"
+        panel.title = "Go to file"
+
+        guard panel.runModal() == .OK, let selectedURL = panel.url else { return nil }
+        guard selectedURL.pathExtension.lowercased() == "md" else { return nil }
+
+        let rootPath = vaultURL.standardizedFileURL.path
+        let selectedPath = selectedURL.standardizedFileURL.path
+        guard selectedPath == rootPath || selectedPath.hasPrefix(rootPath + "/") else { return nil }
+        return selectedURL
     }
 
     // MARK: - Private
@@ -319,6 +383,12 @@ final class VaultManager {
         guard let node = findNode(url: url, in: rootNodes) else { return }
         selectedNode = node
         renamingNodeID = node.id
+    }
+
+    private func activateSelection(url: URL) {
+        guard let node = findNode(url: url, in: rootNodes) else { return }
+        selectedNode = node
+        renamingNodeID = nil
     }
 
     private func findNode(url: URL, in nodes: [FileNode]) -> FileNode? {
