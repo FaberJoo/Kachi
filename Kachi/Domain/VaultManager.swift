@@ -13,6 +13,7 @@ final class VaultManager {
     private(set) var isLoading: Bool = false
     var selectedNode: FileNode?
     private(set) var renamingNodeID: UUID?
+    private(set) var pendingTitleFocusDocumentURL: URL?
 
     private let store = VaultStore()
     private var watcher: FileSystemWatcher?
@@ -125,6 +126,7 @@ final class VaultManager {
         let name = uniqueName("Untitled", in: parent, ext: "md")
         let newURL = parent.appendingPathComponent(name)
         FileManager.default.createFile(atPath: newURL.path, contents: nil)
+        pendingTitleFocusDocumentURL = newURL
 
         refreshTreeScoped(vaultURL: vaultURL)
         activateRename(url: newURL)
@@ -183,6 +185,84 @@ final class VaultManager {
 
     func collapse(node: FileNode) {
         node.isExpanded = false
+    }
+
+    // MARK: - Document I/O
+
+    func readMarkdown(node: FileNode) -> String? {
+        guard !node.isDirectory else { return nil }
+        guard node.url.pathExtension.lowercased() == "md" else { return nil }
+        guard let vault = activeVault else { return nil }
+
+        let vaultURL = resolveURL(vault: vault)
+        _ = vaultURL.startAccessingSecurityScopedResource()
+        defer { vaultURL.stopAccessingSecurityScopedResource() }
+
+        return try? String(contentsOf: node.url, encoding: .utf8)
+    }
+
+    @discardableResult
+    func writeMarkdown(node: FileNode, content: String) -> Bool {
+        guard !node.isDirectory else { return false }
+        guard node.url.pathExtension.lowercased() == "md" else { return false }
+        guard let vault = activeVault else { return false }
+
+        let vaultURL = resolveURL(vault: vault)
+        _ = vaultURL.startAccessingSecurityScopedResource()
+        defer { vaultURL.stopAccessingSecurityScopedResource() }
+
+        do {
+            try content.write(to: node.url, atomically: true, encoding: .utf8)
+            return true
+        } catch {
+            print("VaultManager: write failed for \(node.url.path): \(error)")
+            return false
+        }
+    }
+
+    @discardableResult
+    func renameFile(at oldURL: URL, to newFileName: String) -> URL? {
+        let trimmed = newFileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let vault = activeVault else { return nil }
+
+        let vaultURL = resolveURL(vault: vault)
+        _ = vaultURL.startAccessingSecurityScopedResource()
+        defer { vaultURL.stopAccessingSecurityScopedResource() }
+
+        let newURL = oldURL.deletingLastPathComponent().appendingPathComponent(trimmed)
+        guard newURL != oldURL else { return oldURL }
+
+        do {
+            try FileManager.default.moveItem(at: oldURL, to: newURL)
+            refreshTreeScoped(vaultURL: vaultURL)
+            selectedNode = findNode(url: newURL, in: rootNodes)
+            return newURL
+        } catch {
+            print("VaultManager: rename failed from \(oldURL.path) to \(newURL.path): \(error)")
+            return nil
+        }
+    }
+
+    func consumeTitleFocusRequest(for url: URL) -> Bool {
+        guard let pendingURL = pendingTitleFocusDocumentURL else { return false }
+        guard pendingURL == url else { return false }
+        pendingTitleFocusDocumentURL = nil
+        return true
+    }
+
+    func hasSiblingFileConflict(at sourceURL: URL, withFileName fileName: String) -> Bool {
+        let trimmed = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        guard let vault = activeVault else { return false }
+
+        let vaultURL = resolveURL(vault: vault)
+        _ = vaultURL.startAccessingSecurityScopedResource()
+        defer { vaultURL.stopAccessingSecurityScopedResource() }
+
+        let candidateURL = sourceURL.deletingLastPathComponent().appendingPathComponent(trimmed)
+        guard candidateURL != sourceURL else { return false }
+        return FileManager.default.fileExists(atPath: candidateURL.path)
     }
 
     // MARK: - Private

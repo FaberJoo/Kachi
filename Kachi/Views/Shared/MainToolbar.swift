@@ -5,6 +5,7 @@ import SwiftUI
 
 extension NSToolbarItem.Identifier {
     static let sidebarToggle = NSToolbarItem.Identifier("com.kachi.sidebarToggle")
+    static let centerTabs = NSToolbarItem.Identifier("com.kachi.centerTabs")
 }
 
 // MARK: - Hover-aware button
@@ -51,9 +52,16 @@ private final class HoverButton: NSButton {
 final class MainToolbarDelegate: NSObject, NSToolbarDelegate {
 
     var onToggleSidebar: () -> Void = {}
+    var onSelectTab: (UUID) -> Void = { _ in }
+    var onCloseTab: (UUID) -> Void = { _ in }
+    var onAddTab: () -> Void = {}
 
     private weak var sidebarButton: HoverButton?
     private weak var sidebarItem: NSToolbarItem?
+    private weak var centerTabsHostingView: NSHostingView<AnyView>?
+    private var tabs: [EditorDocumentTab] = []
+    private var activeTabID: UUID?
+    private var editorBackgroundColor: NSColor = .windowBackgroundColor
 
     // MARK: Update
 
@@ -63,14 +71,23 @@ final class MainToolbarDelegate: NSObject, NSToolbarDelegate {
         sidebarItem?.toolTip = isPinned ? "Switch to auto-hide" : "Pin sidebar"
     }
 
+    func updateTabs(_ tabs: [EditorDocumentTab], activeTabID: UUID?, editorBackgroundColor: NSColor? = nil) {
+        self.tabs = tabs
+        self.activeTabID = activeTabID
+        if let editorBackgroundColor {
+            self.editorBackgroundColor = editorBackgroundColor
+        }
+        centerTabsHostingView?.rootView = makeTabsView()
+    }
+
     // MARK: NSToolbarDelegate
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.sidebarToggle]
+        [.sidebarToggle, .flexibleSpace, .centerTabs, .flexibleSpace]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.sidebarToggle, .flexibleSpace, .space]
+        [.sidebarToggle, .centerTabs, .flexibleSpace, .space]
     }
 
     func toolbar(
@@ -78,6 +95,25 @@ final class MainToolbarDelegate: NSObject, NSToolbarDelegate {
         itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
         willBeInsertedIntoToolbar flag: Bool
     ) -> NSToolbarItem? {
+        if itemIdentifier == .centerTabs {
+            let hostingView = NSHostingView(rootView: makeTabsView())
+            hostingView.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                hostingView.widthAnchor.constraint(equalToConstant: 560),
+                hostingView.heightAnchor.constraint(equalToConstant: 36)
+            ])
+            centerTabsHostingView = hostingView
+
+            let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+            item.label = ""
+            item.paletteLabel = "Editor Tabs"
+            item.view = hostingView
+            if #available(macOS 14, *) {
+                item.isBordered = false
+            }
+            return item
+        }
+
         guard itemIdentifier == .sidebarToggle else { return nil }
 
         let button = HoverButton()
@@ -115,6 +151,25 @@ final class MainToolbarDelegate: NSObject, NSToolbarDelegate {
 
     @objc private func handleToggle() {
         onToggleSidebar()
+    }
+
+    private func makeTabsView() -> AnyView {
+        AnyView(
+            ToolbarTabsView(
+                tabs: tabs,
+                activeTabID: activeTabID,
+                editorBackgroundColor: Color(nsColor: editorBackgroundColor),
+                onSelect: { [weak self] tabID in
+                    self?.onSelectTab(tabID)
+                },
+                onClose: { [weak self] tabID in
+                    self?.onCloseTab(tabID)
+                },
+                onAdd: { [weak self] in
+                    self?.onAddTab()
+                }
+            )
+        )
     }
 }
 

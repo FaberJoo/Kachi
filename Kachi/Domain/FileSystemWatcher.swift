@@ -5,9 +5,9 @@ import CoreServices
 /// Calls `onChange` on the main queue, debounced by `latency` seconds.
 final class FileSystemWatcher {
 
-    // nonisolated(unsafe): FSEventStreamRef is a C opaque pointer; access is
-    // guarded by the run-loop-scheduled stream callbacks always firing on the
-    // main thread, and stop/deinit are called on the main thread as well.
+    // nonisolated(unsafe): FSEventStreamRef is a C opaque pointer; callbacks
+    // are delivered on the stream's dispatch queue (main queue here), and
+    // lifecycle methods are called from the main actor usage sites.
     nonisolated(unsafe) private var stream: FSEventStreamRef?
     // Heap-allocated box so the C callback can reach it without capturing self.
     private let box: CallbackBox
@@ -64,7 +64,7 @@ final class FileSystemWatcher {
             Unmanaged<CallbackBox>.fromOpaque(retained).release()
             return
         }
-        FSEventStreamScheduleWithRunLoop(s, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+        FSEventStreamSetDispatchQueue(s, DispatchQueue.main)
         FSEventStreamStart(s)
     }
 }
